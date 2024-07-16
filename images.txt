@@ -1,4 +1,3 @@
-
 mlikiowa/napcat-docker:latest
-meetwq/meme-generator:latest
+meetwq/meme-generator:main
 xhofe/alist:latest
