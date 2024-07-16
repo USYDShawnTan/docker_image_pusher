@@ -1,6 +1,4 @@
-nginx
-kasmweb/nginx:1.25.3
+
 mlikiowa/napcat-docker:latest
 meetwq/meme-generator:latest
 xhofe/alist:latest
-containrrr/watchtower
