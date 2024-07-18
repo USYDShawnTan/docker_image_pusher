@@ -2,3 +2,4 @@ mlikiowa/napcat-docker:latest
 meetwq/meme-generator:main
 xhofe/alist:latest
 keynetworks/ztncui:latest
+jonnyan404/zerotier-moon:latest
