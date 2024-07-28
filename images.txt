@@ -1,5 +1,5 @@
 mlikiowa/napcat-docker:latest
-meetwq/meme-generator:main
+meetwq/meme-generator:latest
 xhofe/alist:latest
 keynetworks/ztncui:latest
 jonnyan404/zerotier-moon:latest
