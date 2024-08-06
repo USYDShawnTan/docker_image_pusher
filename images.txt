@@ -1,6 +1,3 @@
 mlikiowa/napcat-docker:latest
-meetwq/meme-generator:latest
-xhofe/alist:latest
-keynetworks/ztncui:latest
-jonnyan404/zerotier-moon:latest
+rockchin/qchatgpt:latest
 ogarcia/archlinux
