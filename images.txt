@@ -1,4 +1,4 @@
-mlikiowa/napcat-docker:v3.1.3
+mlikiowa/napcat-docker
 rockchin/qchatgpt:latest
 ogarcia/archlinux
 rustdesk/rustdesk-server:latest
