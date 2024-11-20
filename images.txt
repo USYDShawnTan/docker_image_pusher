@@ -1,4 +1,5 @@
 mlikiowa/napcat-docker:v3.4.7
+koishijs/koishi
 mlikiowa/napcat-docker:latest
 rockchin/qchatgpt:latest
 ogarcia/archlinux
