@@ -1,5 +1,5 @@
 koishijs/koishi
-mlikiowa/napcat-docker:v3.4.7
+mlikiowa/napcat-docker:v3.6.9
 mlikiowa/napcat-docker:latest
 rockchin/qchatgpt:latest
 ogarcia/archlinux
