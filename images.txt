@@ -1,6 +1,7 @@
 koishijs/koishi
 adguard/adguardhome:latest
 yangchuansheng/ip_derper
+guovern/iptv-api:latest
 mlikiowa/napcat-docker:v3.6.9
 mlikiowa/napcat-docker:latest
 rockchin/langbot:latest
