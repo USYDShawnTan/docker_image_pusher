@@ -7,3 +7,4 @@ mlikiowa/napcat-docker:latest
 rockchin/langbot:latest
 ogarcia/archlinux
 rustdesk/rustdesk-server:latest
+taksss/php-epg:latest
