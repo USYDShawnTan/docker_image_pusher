@@ -142,9 +142,19 @@ jobs:
               docker tag $image $new_image
               echo "docker push $new_image"
               if docker push $new_image; then
+                push_time=$(date -u "+%Y-%m-%d %H:%M")
                 curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
                   -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-                  -d text="✅ 镜像推送成功: $new_image"
+                  -d parse_mode=Markdown \
+                  --data-urlencode text="🐳 *镜像推送成功！*
+
+                📦 镜像名:
+                \`\`\`
+                $new_image
+                \`\`\`
+                🕒 时间: ${push_time} UTC  
+                🔗 [查看构建日志](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+
               else
                 curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
                   -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
