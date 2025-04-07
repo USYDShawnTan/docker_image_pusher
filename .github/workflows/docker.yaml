@@ -147,11 +147,13 @@ jobs:
                   -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
                   -d parse_mode=Markdown \
                   --data-urlencode text="🐳 *镜像推送成功！*
+
                 🕒 时间: ${push_time} UTC  
                 📦 镜像名:
                 \`\`\`
                 $new_image
                 \`\`\`
+                
               else
                 curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
                   -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
