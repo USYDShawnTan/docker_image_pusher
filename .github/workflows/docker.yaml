@@ -151,7 +151,7 @@ jobs:
               echo "检查镜像: $new_image"
               
               # 尝试获取远程镜像信息
-              remote_info=$(skopeo inspect --creds $ALIYUN_REGISTRY_USER:$ALIYUN_REGISTRY_PASSWORD docker://$new_image 2>/dev/null)
+              remote_info=$(skopeo inspect --creds $ALIYUN_REGISTRY_USER:$ALIYUN_REGISTRY_PASSWORD docker://$new_image 2>/dev/null || true)
               skip_push=false
               
               if [ -n "$remote_info" ]; then
@@ -160,7 +160,7 @@ jobs:
                   echo "远程镜像摘要: $remote_digest"
                   
                   # 获取本地镜像信息
-                  local_info=$(skopeo inspect docker-daemon:$new_image 2>/dev/null)
+                  local_info=$(skopeo inspect docker-daemon:$new_image 2>/dev/null || true)
                   if [ -z "$local_info" ]; then
                       echo "本地镜像检查失败，继续执行 push"
                   else
