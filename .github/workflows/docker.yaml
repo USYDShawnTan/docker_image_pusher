@@ -3,8 +3,7 @@ name: Docker
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
   schedule:
     - cron: "00 23 * * *"
 
@@ -54,11 +53,6 @@ jobs:
 
       - name: Docker Setup Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Install skopeo and jq
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y skopeo jq
 
       - name: Build and push image Aliyun
         run: |
@@ -146,59 +140,19 @@ jobs:
               new_image="$ALIYUN_REGISTRY/$ALIYUN_NAME_SPACE/$platform_prefix$name_space_prefix$image_name_tag"
               echo "docker tag $image $new_image"
               docker tag $image $new_image
-              
-              # 使用 skopeo 检查镜像是否需要推送
-              echo "检查镜像: $new_image"
-              
-              # 尝试获取远程镜像信息
-              remote_info=$(skopeo inspect --creds $ALIYUN_REGISTRY_USER:$ALIYUN_REGISTRY_PASSWORD docker://$new_image 2>/dev/null || true)
-              skip_push=false
-              
-              if [ -n "$remote_info" ]; then
-                  # 提取远程镜像摘要
-                  remote_digest=$(echo "$remote_info" | jq -r '.Digest')
-                  echo "远程镜像摘要: $remote_digest"
-                  
-                  # 获取本地镜像信息
-                  local_info=$(skopeo inspect docker-daemon:$new_image 2>/dev/null || true)
-                  if [ -z "$local_info" ]; then
-                      echo "本地镜像检查失败，继续执行 push"
-                  else
-                      local_digest=$(echo "$local_info" | jq -r '.Digest')
-                      echo "本地镜像摘要: $local_digest"
-                      
-                      # 比较摘要是否相同
-                      if [ "$local_digest" == "$remote_digest" ]; then
-                          echo "镜像内容相同，跳过 docker push"
-                          skip_push=true
-                          push_time=$(date -u "+%Y-%m-%d %H:%M")
-                          curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
-                            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-                            -d parse_mode=Markdown \
-                            --data-urlencode text="🔄 *镜像内容相同，跳过推送*  🕒 时间: ${push_time} UTC\`\`\`${new_image}\`\`\`"
-                      fi
-                  fi
+              echo "docker push $new_image"
+              if docker push $new_image; then
+                push_time=$(date -u "+%Y-%m-%d %H:%M")
+                curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+                  -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+                  -d parse_mode=Markdown \
+                  --data-urlencode text="🐳 *镜像推送成功！*  🕒 时间: ${push_time} UTC\`\`\`${new_image}\`\`\`"
+                
               else
-                  echo "远程仓库没有该镜像，准备 push"
+                curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+                  -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+                  -d text="❌ 镜像推送失败: $new_image"
               fi
-              
-              # 如果不跳过则执行推送
-              if [ "$skip_push" = false ]; then
-                  echo "docker push $new_image"
-                  if docker push $new_image; then
-                    push_time=$(date -u "+%Y-%m-%d %H:%M")
-                    curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
-                      -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-                      -d parse_mode=Markdown \
-                      --data-urlencode text="🐳 *镜像推送成功！*  🕒 时间: ${push_time} UTC\`\`\`${new_image}\`\`\`"
-                    
-                  else
-                    curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
-                      -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-                      -d text="❌ 镜像推送失败: $new_image"
-                  fi
-              fi
-              
               echo "开始清理磁盘空间"
               echo "=============================================================================="
               df -hT
