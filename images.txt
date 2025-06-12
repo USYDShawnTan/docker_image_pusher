@@ -1,9 +1,8 @@
 adguard/adguardhome:latest
+soulter/astrbot:latest
 yangchuansheng/ip_derper
 guovern/iptv-api:latest
-jenkinsci/blueocean:latest
 mlikiowa/napcat-docker:latest
-rockchin/langbot:latest
 ogarcia/archlinux
 
 
