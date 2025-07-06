@@ -137,17 +137,71 @@ jobs:
               
               # 将@sha256:等字符删除
               image_name_tag="${image_name_tag%%@*}"
+              
+              # 生成时间戳用于强制更新
+              timestamp=$(date -u "+%Y%m%d-%H%M%S")
+              
+              # 原始标签
               new_image="$ALIYUN_REGISTRY/$ALIYUN_NAME_SPACE/$platform_prefix$name_space_prefix$image_name_tag"
-              echo "docker tag $image $new_image"
-              docker tag $image $new_image
-              echo "docker push $new_image"
-              if docker push $new_image; then
+              
+              # 检查是否为 latest 标签，如果是则使用强制更新策略
+              if [[ "$image_name_tag" == *":latest" ]]; then
+                  # 提取镜像名（不包含 :latest）
+                  image_base=$(echo "$image_name_tag" | sed 's/:latest$//')
+                  # 创建时间戳标签作为备份
+                  timestamped_image="$ALIYUN_REGISTRY/$ALIYUN_NAME_SPACE/$platform_prefix$name_space_prefix$image_base:$timestamp"
+                  echo "检测到 latest 镜像，执行强制更新策略"
+                  echo "原始标签: $new_image"
+                  echo "时间戳备份标签: $timestamped_image"
+                  
+                  # 先推送时间戳标签作为备份
+                  echo "docker tag $image $timestamped_image"
+                  docker tag $image $timestamped_image
+                  echo "docker push $timestamped_image"
+                  docker push $timestamped_image
+                  
+                  # 强制推送 latest 标签以确保覆盖
+                  echo "docker tag $image $new_image"
+                  docker tag $image $new_image
+                  echo "docker push $new_image --force"
+                  push_success=false
+                  if docker push $new_image; then
+                    push_success=true
+                    echo "latest 标签强制更新成功，docker compose 现在可以检测到更新"
+                  else
+                    echo "latest 标签推送失败"
+                  fi
+              else
+                  echo "非 latest 镜像，仅推送原始标签: $new_image"
+                  echo "docker tag $image $new_image"
+                  docker tag $image $new_image
+                  echo "docker push $new_image"
+                  push_success=false
+                  if docker push $new_image; then
+                    push_success=true
+                    echo "原始标签推送成功"
+                  else
+                    echo "原始标签推送失败"
+                  fi
+              fi
+              
+              # 发送通知
+              if [ "$push_success" = true ]; then
                 push_time=$(date -u "+%Y-%m-%d %H:%M")
-                curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
-                  -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
-                  -d parse_mode=Markdown \
-                  --data-urlencode text="🐳 *镜像推送成功！*  🕒 时间: ${push_time} UTC\`\`\`${new_image}\`\`\`"
-                
+                if [[ "$image_name_tag" == *":latest" ]]; then
+                    curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+                      -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+                      -d parse_mode=Markdown \
+                      --data-urlencode text="🐳 *镜像强制更新成功！*  🕒 时间: ${push_time} UTC
+                    ✅ latest 标签已覆盖更新: \`${new_image}\`
+                    📦 时间戳备份标签: \`${timestamped_image}\`
+                    🔄 现在可以使用 \`docker compose up -d --pull always\` 自动更新"
+                else
+                    curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
+                      -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+                      -d parse_mode=Markdown \
+                      --data-urlencode text="🐳 *镜像推送成功！*  🕒 时间: ${push_time} UTC\`\`\`${new_image}\`\`\`"
+                fi
               else
                 curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage \
                   -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
@@ -159,6 +213,10 @@ jobs:
               echo "=============================================================================="
               docker rmi $image
               docker rmi $new_image
+              # 如果是 latest 镜像，同时清理时间戳标签
+              if [[ "$image_name_tag" == *":latest" ]]; then
+                  docker rmi $timestamped_image
+              fi
               echo "磁盘空间清理完毕"
               echo "=============================================================================="
               df -hT
