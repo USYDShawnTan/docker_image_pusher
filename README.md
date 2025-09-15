@@ -38,12 +38,17 @@ Fork本项目<br>
 ALIYUN_NAME_SPACE,ALIYUN_REGISTRY_USER，ALIYUN_REGISTRY_PASSWORD，ALIYUN_REGISTRY<br>
 配置成环境变量
 
-### 添加镜像
-打开images.txt文件，添加你想要的镜像 
-可以加tag，也可以不用(默认latest)<br>
-可添加 --platform=xxxxx 的参数指定镜像架构<br>
-可使用 k8s.gcr.io/kube-state-metrics/kube-state-metrics 格式指定私库<br>
-可使用 #开头作为注释<br>
+### 添加镜像（按官方标签同步）
+打开images.txt文件，逐行添加上游镜像仓库（如 `adguard/adguardhome`、`ghcr.io/org/app`）。<br>
+不强制填写 tag：工作流会自动列出并同步上游的标签。你可以在工作流中通过 `TAG_POLICY` 控制范围：<br>
+- `all`：同步所有标签<br>
+- `semver`：仅同步语义化版本（含可选 `v` 前缀）<br>
+- `semver_with_latest`：同步语义化版本 + latest（默认）<br>
+- `latest_only`：仅 latest<br>
+- `recent_N`：仅最近 N 个（通过 `RECENT_N` 指定，默认 50）<br>
+可在行尾添加 `--platform=xxxxx` 作为注释用途；目前镜像同步使用 `--all` 拷贝多架构清单，无需单独指定。<br>
+可使用 `k8s.gcr.io/kube-state-metrics/kube-state-metrics` 格式指定私库；<br>
+可使用 `#` 开头作为注释。<br>
 ![](doc/images.png)
 文件提交后，自动进入Github Action构建
 
