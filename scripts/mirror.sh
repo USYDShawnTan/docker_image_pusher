@@ -22,19 +22,68 @@ inspect_digest_hash() {
   echo -n "${raw}" | sha256sum | awk '{print $1}'
 }
 
-dest_name_from_source() {
-  local src_image="$1" # 可能为 ghcr.io/org/app 或 library/alpine 或 org/app
-  if [[ "${src_image}" == */*/* ]]; then
-    local p1="${src_image%%/*}"          # 如 ghcr.io
-    local rest="${src_image#*/}"         # org/app
-    local p2="${rest%%/*}"               # org
-    local name="${rest#*/}"              # app
-    printf '%s/%s' "${p1//./-}-${p2}" "${name}"
+declare -A DUPLICATE_MAP=()
+declare -A NAME_SPACE_OF_IMAGE=()
+
+# 预扫描 images.txt，找出同名镜像（不同上游命名空间）
+detect_duplicates() {
+  while IFS= read -r line; do
+    line="$(echo "${line}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+    [[ -z "${line}" || "${line}" =~ ^# ]] && continue
+    local entry="${line%% --platform=*}"
+    entry="${entry%%@*}"
+    local src_no_tag="${entry%%:*}"
+
+    local seg_count
+    seg_count=$(awk -F'/' '{print NF}' <<<"${src_no_tag}")
+    local image_name image_ns
+    image_name="${src_no_tag##*/}"
+    if [[ ${seg_count} -eq 3 ]]; then
+      image_ns="$(awk -F'/' '{print $2}' <<<"${src_no_tag}")"
+    elif [[ ${seg_count} -eq 2 ]]; then
+      image_ns="$(awk -F'/' '{print $1}' <<<"${src_no_tag}")"
+    else
+      image_ns=""
+    fi
+
+    if [[ -z "${NAME_SPACE_OF_IMAGE["${image_name}"]+x}" ]]; then
+      NAME_SPACE_OF_IMAGE["${image_name}"]="${image_ns}_"
+    else
+      if [[ "${NAME_SPACE_OF_IMAGE["${image_name}"]}" != "${image_ns}_" ]]; then
+        DUPLICATE_MAP["${image_name}"]=true
+      fi
+    fi
+  done < images.txt
+}
+
+# 生成符合 ACR 的目标仓库（仅两级：命名空间/仓库名）
+dest_repo_from_source() {
+  local src_image="$1"
+  local seg_count
+  seg_count=$(awk -F'/' '{print NF}' <<<"${src_image}")
+  local image_name image_ns
+  image_name="${src_image##*/}"
+  if [[ ${seg_count} -eq 3 ]]; then
+    image_ns="$(awk -F'/' '{print $2}' <<<"${src_image}")"
+  elif [[ ${seg_count} -eq 2 ]]; then
+    image_ns="$(awk -F'/' '{print $1}' <<<"${src_image}")"
   else
-    local ns="${src_image%%/*}"
-    local name="${src_image#*/}"
-    printf '%s/%s' "${ns}" "${name}"
+    image_ns=""
   fi
+
+  local prefix=""
+  if [[ -n "${DUPLICATE_MAP["${image_name}"]+x}" ]]; then
+    if [[ -n "${image_ns}" ]]; then
+      prefix="${image_ns}_"
+    fi
+  fi
+
+  local repo_name
+  repo_name="${prefix}${image_name}"
+  repo_name="${repo_name,,}"
+  repo_name="${repo_name//[^a-z0-9._-]/_}"
+
+  printf 'docker://%s/%s/%s' "${ALIYUN_REGISTRY}" "${ALIYUN_NAME_SPACE}" "${repo_name}"
 }
 
 mirror_one_image() {
@@ -47,9 +96,8 @@ mirror_one_image() {
     mapfile -t tags < <(printf '%s\n' "${tags[@]}" | tail -n "${RECENT_N}")
   fi
 
-  local dest_name
-  dest_name="$(dest_name_from_source "${src_image}")"
-  local dest_repo="docker://${ALIYUN_REGISTRY}/${ALIYUN_NAME_SPACE}/${dest_name}"
+  local dest_repo
+  dest_repo="$(dest_repo_from_source "${src_image}")"
 
   for t in "${tags[@]}"; do
     case "${TAG_POLICY}" in
@@ -98,6 +146,8 @@ mirror_one_image() {
 }
 
 # 读取 images.txt
+detect_duplicates
+
 while IFS= read -r line; do
   line="$(echo "${line}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
   [[ -z "${line}" || "${line}" =~ ^# ]] && continue
