@@ -1,8 +1,6 @@
-adguard/adguardhome:latest
-soulter/astrbot:latest
-yangchuansheng/ip_derper
-guovern/iptv-api:latest
-mlikiowa/napcat-docker:latest
+adguard/adguardhome
+soulter/astrbot
+mlikiowa/napcat-docker
 ogarcia/archlinux
 
 

@@ -1,85 +1,64 @@
-# Docker Images Pusher
+# Docker Images Pusher（按官方标签同步）
 
-使用Github Action将国外的Docker镜像转存到阿里云私有仓库，供国内服务器使用，免费易用<br>
-- 支持DockerHub, gcr.io, k8s.io, ghcr.io等任意仓库<br>
-- 支持最大40GB的大型镜像<br>
-- 使用阿里云的官方线路，速度快<br>
+使用 GitHub Actions 将上游 Docker 镜像按“官方标签”同步到阿里云容器镜像服务（ACR），适合国内环境快速拉取。
 
-视频教程：https://www.bilibili.com/video/BV1Zn4y19743/
+- 支持 DockerHub / GHCR / GCR / k8s.gcr.io 等
+- 支持多架构（manifest list 原样复制）
+- 增量同步：digest 未变则跳过
+- 保留官方版本号标签（不再使用时间戳标签）
 
-作者：**[技术爬爬虾](https://github.com/tech-shrimp/me)**<br>
-B站，抖音，Youtube全网同名，转载请注明作者<br>
+作者：**[技术爬爬虾](https://github.com/tech-shrimp/me)**
 
-## 使用方式
+## 快速开始
 
+### 1) 配置 ACR 相关 Secrets
+在仓库 Settings -> Secrets and variables -> Actions 中新增：
+- `ALIYUN_REGISTRY`（如：`registry.cn-hangzhou.aliyuncs.com`）
+- `ALIYUN_NAME_SPACE`（你的命名空间）
+- `ALIYUN_REGISTRY_USER`
+- `ALIYUN_REGISTRY_PASSWORD`
 
-### 配置阿里云
-登录阿里云容器镜像服务<br>
-https://cr.console.aliyun.com/<br>
-启用个人实例，创建一个命名空间（**ALIYUN_NAME_SPACE**）
-![](/doc/命名空间.png)
+### 2) 添加需要同步的上游镜像
+编辑 `images.txt`，每行一个仓库（无需写 `:latest`）：
+- `adguard/adguardhome`
+- `ghcr.io/org/app`
 
-访问凭证–>获取环境变量<br>
-用户名（**ALIYUN_REGISTRY_USER**)<br>
-密码（**ALIYUN_REGISTRY_PASSWORD**)<br>
-仓库地址（**ALIYUN_REGISTRY**）<br>
+支持 `#` 注释；可在行尾添加 `--platform=...` 仅作备注（同步使用 `--all`，一般无需指定）。
 
-![](/doc/用户名密码.png)
+### 3) 触发同步
+- 提交对 `images.txt` 的修改，或在 Actions 手动运行，或等待定时任务。
 
+## 同步策略
 
-### Fork本项目
-Fork本项目<br>
-#### 启动Action
-进入您自己的项目，点击Action，启用Github Action功能<br>
-#### 配置环境变量
-进入Settings->Secret and variables->Actions->New Repository secret
-![](doc/配置环境变量.png)
-将上一步的**四个值**<br>
-ALIYUN_NAME_SPACE,ALIYUN_REGISTRY_USER，ALIYUN_REGISTRY_PASSWORD，ALIYUN_REGISTRY<br>
-配置成环境变量
+默认：`TAG_POLICY=semver_with_latest`（语义化版本 + latest）。
+可选：
+- `all`：同步所有标签
+- `semver`：仅语义化版本（支持 `v` 前缀、预发布与构建元数据）
+- `semver_with_latest`：语义化版本 + latest（默认）
+- `latest_only`：仅 latest
+- `recent_N`：最近 N 个标签（配合 `RECENT_N`，默认 50）
 
-### 添加镜像（按官方标签同步）
-打开images.txt文件，逐行添加上游镜像仓库（如 `adguard/adguardhome`、`ghcr.io/org/app`）。<br>
-不强制填写 tag：工作流会自动列出并同步上游的标签。你可以在工作流中通过 `TAG_POLICY` 控制范围：<br>
-- `all`：同步所有标签<br>
-- `semver`：仅同步语义化版本（含可选 `v` 前缀）<br>
-- `semver_with_latest`：同步语义化版本 + latest（默认）<br>
-- `latest_only`：仅 latest<br>
-- `recent_N`：仅最近 N 个（通过 `RECENT_N` 指定，默认 50）<br>
-可在行尾添加 `--platform=xxxxx` 作为注释用途；目前镜像同步使用 `--all` 拷贝多架构清单，无需单独指定。<br>
-可使用 `k8s.gcr.io/kube-state-metrics/kube-state-metrics` 格式指定私库；<br>
-可使用 `#` 开头作为注释。<br>
-![](doc/images.png)
-文件提交后，自动进入Github Action构建
+多架构：`skopeo copy --all` 原样复制 manifest list。
 
-### 使用镜像
-回到阿里云，镜像仓库，点击任意镜像，可查看镜像状态。(可以改成公开，拉取镜像免登录)
-![](doc/开始使用.png)
+重名处理：不同上游命名空间下存在同名镜像时，目标仓库名自动加前缀（如 `org_adguardhome`），并统一小写。
 
-在国内服务器pull镜像, 例如：<br>
+## 使用镜像
+
+在目标环境拉取：
 ```
-docker pull registry.cn-hangzhou.aliyuncs.com/shrimp-images/alpine
+docker pull ${ALIYUN_REGISTRY}/${ALIYUN_NAME_SPACE}/adguardhome:latest
 ```
-registry.cn-hangzhou.aliyuncs.com 即 ALIYUN_REGISTRY(阿里云仓库地址)<br>
-shrimp-images 即 ALIYUN_NAME_SPACE(阿里云命名空间)<br>
-alpine 即 阿里云中显示的镜像名<br>
 
-### 多架构
-需要在images.txt中用 --platform=xxxxx手动指定镜像架构
-指定后的架构会以前缀的形式放在镜像名字前面
-![](doc/多架构.png)
+当上游 `latest` 发生变更时，ACR 中的 `latest` digest 跟随更新。Watchtower 或 `docker compose up -d --pull always` 可自动检测并更新。
 
-### 镜像重名
-程序自动判断是否存在名称相同, 但是属于不同命名空间的情况。
-如果存在，会把命名空间作为前缀加在镜像名称前。
-例如:
-```
-xhofe/alist
-xiaoyaliu/alist
-```
-![](doc/镜像重名.png)
+## 工作流设置
 
-### 定时执行
-修改/.github/workflows/docker.yaml文件
-添加 schedule即可定时执行(此处cron使用UTC时区)
-![](doc/定时执行.png)
+在 `.github/workflows/docker.yaml` 中可调整：
+- `TAG_POLICY` 与 `RECENT_N`
+- `schedule.cron`（默认每天 23:00 UTC）
+
+## 常见问题
+
+1) 推送被拒绝：确保 ACR 有对应仓库（或开启自动创建）并校验四个 Secrets。
+2) 只同步 latest：将 `TAG_POLICY` 设为 `latest_only`。
+3) 仅同步指定标签：需要“逐行精确同步”模式，可提 Issue 我来扩展。
