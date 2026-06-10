@@ -1,5 +1,3 @@
 adguard/adguardhome
-soulter/astrbot
-mlikiowa/napcat-docker
 ogarcia/archlinux
 zendesk/maxwell:1.44.0
