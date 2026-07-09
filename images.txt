@@ -1,3 +1,4 @@
 adguard/adguardhome
+weishaw/sub2api
 ogarcia/archlinux
 zendesk/maxwell:1.44.0
