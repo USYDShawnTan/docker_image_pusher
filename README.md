@@ -3,7 +3,7 @@
 使用 GitHub Actions 将上游 Docker 镜像按“官方标签”同步到阿里云容器镜像服务（ACR），适合国内环境快速拉取。
 
 - 支持 DockerHub / GHCR / GCR / k8s.gcr.io 等
-- 支持多架构（manifest list 原样复制）
+- 支持多架构（自动过滤 ACR 不兼容的 BuildKit attestation/OCI empty 辅助 manifest，保留可运行架构）
 - 增量同步：digest 未变则跳过
 - 保留官方版本号标签（不再使用时间戳标签）
 
@@ -38,7 +38,7 @@
 - `latest_only`：仅 latest
 - `recent_N`：最近 N 个标签（配合 `RECENT_N`，默认 50）
 
-多架构：`skopeo copy --all` 原样复制 manifest list。
+多架构：普通镜像使用 `skopeo copy --all` 原样复制 manifest list。源索引若包含 `unknown/unknown` 或 attestation 描述符，脚本会先复制到临时 OCI layout，移除不可运行的辅助描述符，再同步其余架构到 ACR。过滤后目标 manifest digest 与上游不同，脚本通过索引注解记录上游 digest，以继续支持增量同步。
 
 重名处理：不同上游命名空间下存在同名镜像时，目标仓库名自动加前缀（如 `org_adguardhome`），并统一小写。
 
@@ -59,6 +59,6 @@ docker pull ${ALIYUN_REGISTRY}/${ALIYUN_NAME_SPACE}/adguardhome:latest
 
 ## 常见问题
 
-1) 推送被拒绝：确保 ACR 有对应仓库（或开启自动创建）并校验四个 Secrets。
+1) 推送被拒绝：确保 ACR 有对应仓库（或开启自动创建）并校验四个 Secrets。若出现 `unknown manifest class for application/vnd.oci.empty.v1+json`，升级到包含 OCI attestation 过滤逻辑的脚本版本。
 2) 只同步 latest：将 `TAG_POLICY` 设为 `latest_only`。
 3) 仅同步指定标签：需要“逐行精确同步”模式，可提 Issue 我来扩展。
