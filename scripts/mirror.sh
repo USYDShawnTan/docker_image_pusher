@@ -86,6 +86,33 @@ dest_repo_from_source() {
   printf 'docker://%s/%s/%s' "${ALIYUN_REGISTRY}" "${ALIYUN_NAME_SPACE}" "${repo_name}"
 }
 
+
+# OCI index 中的 BuildKit attestation 常带有 unknown/unknown 平台及
+# application/vnd.oci.empty.v1+json 配置。部分 ACR 不接受这类 manifest。
+# 先复制到本地 OCI layout，仅删除无法作为运行镜像的平台描述，再推回 ACR。
+copy_without_auxiliary_manifests() {
+  local src_tag="$1" dest_tag="$2" source_digest="$3"
+  local oci_dir
+  oci_dir="$(mktemp -d)"
+
+  log "Copy to temporary OCI layout to filter unsupported auxiliary manifests"
+  if ! skopeo copy --all --retry-times 3 "${src_tag}" "oci:${oci_dir}:mirror"; then
+    rm -rf "${oci_dir}"
+    return 1
+  fi
+  if ! bash "$(dirname "${BASH_SOURCE[0]}")/filter_oci_index.sh" \
+    "${oci_dir}" mirror "${source_digest}"; then
+    rm -rf "${oci_dir}"
+    return 1
+  fi
+
+  if ! skopeo copy --all --retry-times 3 "oci:${oci_dir}:mirror" "${dest_tag}"; then
+    rm -rf "${oci_dir}"
+    return 1
+  fi
+  rm -rf "${oci_dir}"
+}
+
 mirror_one_image() {
   local src_image="$1"        # 不带 tag 的源，如: adguard/adguardhome 或 ghcr.io/org/app
   local src_ref="docker://${src_image}"
@@ -123,25 +150,40 @@ mirror_one_image() {
     local dest_tag="${dest_repo}:${t}"
 
     log "Inspect source ${src_tag}"
-    if ! src_hash=$(inspect_digest_hash "${src_tag}"); then
+    local src_raw src_hash dest_raw dest_hash
+    if ! src_raw=$(skopeo inspect --raw "${src_tag}" 2>/dev/null); then
       log "Skip ${src_tag}: cannot inspect"
       continue
     fi
+    src_hash="$(printf '%s' "${src_raw}" | sha256sum | awk '{print $1}')"
 
+    dest_raw=""
     dest_hash=""
-    if dest_hash=$(inspect_digest_hash "${dest_tag}"); then
-      :
-    else
-      dest_hash=""
+    if dest_raw=$(skopeo inspect --raw "${dest_tag}" 2>/dev/null); then
+      dest_hash="$(printf '%s' "${dest_raw}" | sha256sum | awk '{print $1}')"
     fi
 
-    if [[ -n "${dest_hash}" && "${src_hash}" == "${dest_hash}" ]]; then
+    # 过滤过的 OCI index digest 与上游不同；用写入的上游 digest 标记避免重复推送。
+    if [[ "${src_hash}" == "${dest_hash}" ]] ||
+      { [[ -n "${dest_raw}" ]] && printf '%s' "${dest_raw}" |
+        jq -e --arg src "sha256:${src_hash}" \
+          '.annotations["io.github.docker_image_pusher.upstream.digest"] == $src' >/dev/null 2>&1; }; then
       log "Skip up-to-date ${dest_tag}"
       continue
     fi
 
     log "Copy ${src_tag} => ${dest_tag}"
-    skopeo copy --all --retry-times 3 "${src_tag}" "${dest_tag}"
+    # 同步所有可运行平台，但跳过 Docker BuildKit 的证明类辅助 manifest。
+    if printf '%s' "${src_raw}" | jq -e '
+      (.manifests // []) | any(.[];
+        (.platform.os // "") == "unknown" or
+        (.platform.architecture // "") == "unknown" or
+        (.annotations["vnd.docker.reference.type"] == "attestation-manifest")
+      )' >/dev/null 2>&1; then
+      copy_without_auxiliary_manifests "${src_tag}" "${dest_tag}" "sha256:${src_hash}"
+    else
+      skopeo copy --all --retry-times 3 "${src_tag}" "${dest_tag}"
+    fi
   done
 }
 

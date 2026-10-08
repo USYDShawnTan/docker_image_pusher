@@ -1,0 +1,22 @@
+name: OCI index filter tests
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/oci-filter-tests.yaml'
+
+jobs:
+  filter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell scripts
+        run: |
+          bash -n scripts/mirror.sh
+          bash -n scripts/filter_oci_index.sh
+          bash -n tests/test_filter_oci_index.sh
+      - name: Test OCI manifest filtering
+        run: |
+          bash tests/test_filter_oci_index.sh
